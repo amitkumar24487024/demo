@@ -13,8 +13,6 @@ WORKDIR /app
 
 COPY --from=build /workspace/build/libs/*.jar app.jar
 
-ENV PORT=8080
-
-EXPOSE ${PORT}
+EXPOSE 8080
 
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]
