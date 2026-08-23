@@ -3,7 +3,7 @@
 ## Run locally
 
 ```bash
-cd /home/runner/work/demo/demo
+cd /path/to/demo
 ./gradlew bootRun
 ```
 
@@ -18,10 +18,15 @@ The app is available at `http://localhost:8080/api`.
 - `gcloud` installed and authenticated
 - Cloud Run, Cloud Build, and Artifact Registry APIs enabled
 
+```bash
+gcloud config set project PROJECT_ID
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com
+```
+
 ### Deploy from source
 
 ```bash
-cd /home/runner/work/demo/demo
+cd /path/to/demo
 gcloud run deploy demo \
   --source . \
   --region us-central1 \
@@ -30,23 +35,13 @@ gcloud run deploy demo \
 
 Cloud Run builds and deploys the application directly from this repository.
 
-### Deploy with Docker
+### Build and deploy an image manually
 
 ```bash
-cd /home/runner/work/demo/demo
+cd /path/to/demo
+gcloud builds submit --tag us-central1-docker.pkg.dev/PROJECT_ID/demo/demo
 gcloud run deploy demo \
-  --source . \
-  --region us-central1 \
-  --allow-unauthenticated
-```
-
-If you prefer to build the image yourself:
-
-```bash
-cd /home/runner/work/demo/demo
-gcloud builds submit --tag REGION-docker.pkg.dev/PROJECT_ID/REPOSITORY/demo
-gcloud run deploy demo \
-  --image REGION-docker.pkg.dev/PROJECT_ID/REPOSITORY/demo \
+  --image us-central1-docker.pkg.dev/PROJECT_ID/demo/demo \
   --region us-central1 \
   --allow-unauthenticated
 ```
