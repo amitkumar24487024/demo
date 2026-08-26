@@ -66,7 +66,6 @@ jobs:
             "--image=${IMAGE_URI}"
             "--region=${GCP_REGION}"
             "--project=${GCP_PROJECT_ID}"
-            "--async"
             "--quiet"
           )
 
@@ -97,20 +96,21 @@ jobs:
       - name: Post-deploy readiness check
         run: |
           set -euo pipefail
-          for attempt in {1..20}; do
-            READY_STATUS="$(gcloud run services describe "$CLOUD_RUN_SERVICE" \
-              --region="$GCP_REGION" \
-              --project="$GCP_PROJECT_ID" \
-              --format="value(status.conditions[?type='Ready'].status)")"
-            if [ "$READY_STATUS" = "True" ]; then
-              break
-            fi
-            if [ "$attempt" -eq 20 ]; then
-              echo "Cloud Run service is not Ready."
-              exit 1
-            fi
-            sleep 10
-          done
+          LATEST_CREATED_REVISION="$(gcloud run services describe "$CLOUD_RUN_SERVICE" \
+            --region="$GCP_REGION" \
+            --project="$GCP_PROJECT_ID" \
+            --format="value(status.latestCreatedRevisionName)")"
+          LATEST_READY_REVISION="$(gcloud run services describe "$CLOUD_RUN_SERVICE" \
+            --region="$GCP_REGION" \
+            --project="$GCP_PROJECT_ID" \
+            --format="value(status.latestReadyRevisionName)")"
+          test -n "$LATEST_CREATED_REVISION" || { echo "No latest created revision found."; exit 1; }
+          test "$LATEST_CREATED_REVISION" = "$LATEST_READY_REVISION" || {
+            echo "Latest created revision is not ready."
+            echo "Created: $LATEST_CREATED_REVISION"
+            echo "Ready:   $LATEST_READY_REVISION"
+            exit 1
+          }
           gcloud run services describe "$CLOUD_RUN_SERVICE" \
             --region="$GCP_REGION" \
             --project="$GCP_PROJECT_ID" \
