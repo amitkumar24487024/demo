@@ -63,7 +63,7 @@ The service returns `Hello, World!`.
 
 ## GitHub Actions CI and Docker Hub publish
 
-Workflow file: `/home/runner/work/demo/demo/.github/workflows/docker-image.yml`
+Workflow file: `.github/workflows/docker-image.yml`
 
 - On pull requests to `main`, it runs `./gradlew test bootJar --no-daemon` and verifies Docker image build.
 - On pushes to `main`, it does the same checks and then publishes the image to Docker Hub.
