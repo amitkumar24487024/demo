@@ -17,7 +17,7 @@ public class DemoApplication {
 
 	@GetMapping
 	public String hello() {
-		return "Hello, World! Welcome to Github Actions and Cloud Run";
+		return "Hello, World! Welcome to Github Actions and Cloud Run !";
 	}
 
 }
