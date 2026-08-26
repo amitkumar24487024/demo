@@ -101,7 +101,7 @@ jobs:
               --region="$GCP_REGION" \
               --project="$GCP_PROJECT_ID" \
               --format="value(status.latestCreatedRevisionName,status.latestReadyRevisionName)")"
-            IFS=';' read -r LATEST_CREATED_REVISION LATEST_READY_REVISION <<< "$REVISION_PAIR"
+            IFS=$'\t' read -r LATEST_CREATED_REVISION LATEST_READY_REVISION <<< "$REVISION_PAIR"
             if [ -n "$LATEST_CREATED_REVISION" ] && [ "$LATEST_CREATED_REVISION" = "$LATEST_READY_REVISION" ]; then
               break
             fi
