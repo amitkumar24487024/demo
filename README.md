@@ -60,3 +60,20 @@ The service returns `Hello, World!`.
 
 - The app reads the Cloud Run `PORT` environment variable and falls back to `8080` locally.
 - Adjust CPU, memory, concurrency, and min/max instances in the Cloud Run service settings as needed.
+
+## GitHub Actions CI and Docker Hub publish
+
+Workflow file: `.github/workflows/docker-image.yml`
+
+- On pull requests to `main`, it runs `./gradlew test bootJar --no-daemon` and verifies Docker image build.
+- On pushes to `main`, it does the same checks and then publishes the image to Docker Hub.
+
+### Required GitHub repository configuration for Docker Hub push
+
+Set these in GitHub repository settings:
+
+- Repository **Secrets**:
+  - `DOCKERHUB_USERNAME` = your Docker Hub username
+  - `DOCKERHUB_TOKEN` = Docker Hub access token (not your password)
+- Repository **Variables**:
+  - `DOCKERHUB_IMAGE` = full Docker image name, e.g. `yourusername/demo`

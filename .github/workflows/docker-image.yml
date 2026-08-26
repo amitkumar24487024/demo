@@ -1,4 +1,4 @@
-name: Docker Image CI
+name: CI and Docker Publish
 
 on:
   push:
@@ -10,12 +10,56 @@ permissions:
   contents: read
 
 jobs:
-
-  build:
-
+  build-test-and-image:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag my-image-name:$(date +%s)
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Run tests and build bootJar
+        run: ./gradlew test bootJar --no-daemon
+
+      - name: Build Docker image for CI verification
+        if: github.event_name == 'pull_request'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          tags: ci-image:${{ github.sha }}
+
+      - name: Validate Docker Hub publish configuration
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          DOCKERHUB_IMAGE: ${{ vars.DOCKERHUB_IMAGE }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          test -n "$DOCKERHUB_IMAGE" || { echo "Missing repository variable DOCKERHUB_IMAGE (example: username/repository)."; exit 1; }
+          test -n "$DOCKERHUB_USERNAME" || { echo "Missing secret DOCKERHUB_USERNAME."; exit 1; }
+          test -n "$DOCKERHUB_TOKEN" || { echo "Missing secret DOCKERHUB_TOKEN."; exit 1; }
+
+      - name: Log in to Docker Hub
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ vars.DOCKERHUB_IMAGE }}:${{ github.sha }}
+            ${{ vars.DOCKERHUB_IMAGE }}:latest
