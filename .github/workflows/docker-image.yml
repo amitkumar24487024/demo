@@ -33,7 +33,7 @@ jobs:
           context: .
           file: ./Dockerfile
           push: false
-          tags: demo:ci-${{ github.sha }}
+          tags: ci-image:${{ github.sha }}
 
       - name: Validate Docker Hub publish configuration
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -42,9 +42,9 @@ jobs:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
-          test -n "$DOCKERHUB_IMAGE" || (echo "Missing repository variable DOCKERHUB_IMAGE (example: username/repository)." && exit 1)
-          test -n "$DOCKERHUB_USERNAME" || (echo "Missing secret DOCKERHUB_USERNAME." && exit 1)
-          test -n "$DOCKERHUB_TOKEN" || (echo "Missing secret DOCKERHUB_TOKEN." && exit 1)
+          test -n "$DOCKERHUB_IMAGE" || { echo "Missing repository variable DOCKERHUB_IMAGE (example: username/repository)."; exit 1; }
+          test -n "$DOCKERHUB_USERNAME" || { echo "Missing secret DOCKERHUB_USERNAME."; exit 1; }
+          test -n "$DOCKERHUB_TOKEN" || { echo "Missing secret DOCKERHUB_TOKEN."; exit 1; }
 
       - name: Log in to Docker Hub
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
