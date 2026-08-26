@@ -104,7 +104,7 @@ Set these in GitHub repository settings:
 
 ### Optional repository variables for runtime flags
 
-- `CLOUD_RUN_ALLOW_UNAUTHENTICATED` = `true` (default) or `false`
+- `CLOUD_RUN_ALLOW_UNAUTHENTICATED` = `false` (default) or `true`
 - `CLOUD_RUN_PORT` = container port (example: `8080`)
 - `CLOUD_RUN_MEMORY` = memory limit (example: `512Mi`)
 - `CLOUD_RUN_MIN_INSTANCES` = minimum instances (example: `0`)
@@ -114,6 +114,8 @@ Set these in GitHub repository settings:
 
 1. Enable required APIs in your GCP project:
    - Cloud Run API (`run.googleapis.com`)
+   - IAM Service Account Credentials API (`iamcredentials.googleapis.com`)
+   - Security Token Service API (`sts.googleapis.com`)
 2. Create a deploy service account for GitHub Actions.
 3. Grant least-privilege IAM roles:
    - `roles/run.admin`

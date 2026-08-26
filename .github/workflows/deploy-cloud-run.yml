@@ -85,7 +85,7 @@ jobs:
             ARGS+=("--max-instances=${CLOUD_RUN_MAX_INSTANCES}")
           fi
 
-          if [ "${CLOUD_RUN_ALLOW_UNAUTHENTICATED:-true}" = "true" ]; then
+          if [ "${CLOUD_RUN_ALLOW_UNAUTHENTICATED:-false}" = "true" ]; then
             ARGS+=("--allow-unauthenticated")
           else
             ARGS+=("--no-allow-unauthenticated")
@@ -96,11 +96,20 @@ jobs:
       - name: Post-deploy readiness check
         run: |
           set -euo pipefail
-          READY_STATUS="$(gcloud run services describe "$CLOUD_RUN_SERVICE" \
-            --region="$GCP_REGION" \
-            --project="$GCP_PROJECT_ID" \
-            --format="value(status.conditions[?type='Ready'].status)")"
-          test "$READY_STATUS" = "True" || { echo "Cloud Run service is not Ready."; exit 1; }
+          for attempt in {1..20}; do
+            READY_STATUS="$(gcloud run services describe "$CLOUD_RUN_SERVICE" \
+              --region="$GCP_REGION" \
+              --project="$GCP_PROJECT_ID" \
+              --format="value(status.conditions[?type='Ready'].status)")"
+            if [ "$READY_STATUS" = "True" ]; then
+              break
+            fi
+            if [ "$attempt" -eq 20 ]; then
+              echo "Cloud Run service is not Ready."
+              exit 1
+            fi
+            sleep 10
+          done
           gcloud run services describe "$CLOUD_RUN_SERVICE" \
             --region="$GCP_REGION" \
             --project="$GCP_PROJECT_ID" \
