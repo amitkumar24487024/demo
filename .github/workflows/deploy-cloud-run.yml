@@ -36,26 +36,39 @@ jobs:
 
     steps:
       - name: Validate deploy configuration
+        id: deploy_config
         run: |
-          test -n "$GCP_PROJECT_ID" || { echo "Missing secret GCP_PROJECT_ID."; exit 1; }
-          test -n "$GCP_WIF_PROVIDER" || { echo "Missing secret GCP_WIF_PROVIDER."; exit 1; }
-          test -n "$GCP_SERVICE_ACCOUNT" || { echo "Missing secret GCP_SERVICE_ACCOUNT."; exit 1; }
-          test -n "$GCP_REGION" || { echo "Missing variable GCP_REGION."; exit 1; }
-          test -n "$CLOUD_RUN_SERVICE" || { echo "Missing variable CLOUD_RUN_SERVICE."; exit 1; }
-          test -n "$DOCKERHUB_IMAGE" || { echo "Missing variable DOCKERHUB_IMAGE."; exit 1; }
+          missing=()
+          test -n "$GCP_PROJECT_ID" || missing+=("secret GCP_PROJECT_ID")
+          test -n "$GCP_WIF_PROVIDER" || missing+=("secret GCP_WIF_PROVIDER")
+          test -n "$GCP_SERVICE_ACCOUNT" || missing+=("secret GCP_SERVICE_ACCOUNT")
+          test -n "$GCP_REGION" || missing+=("variable GCP_REGION")
+          test -n "$CLOUD_RUN_SERVICE" || missing+=("variable CLOUD_RUN_SERVICE")
+          test -n "$DOCKERHUB_IMAGE" || missing+=("variable DOCKERHUB_IMAGE")
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "deploy_enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Deploy skipped::Missing required Cloud Run configuration: ${missing[*]}"
+            exit 0
+          fi
+
+          echo "deploy_enabled=true" >> "$GITHUB_OUTPUT"
 
       - name: Authenticate to Google Cloud
+        if: steps.deploy_config.outputs.deploy_enabled == 'true'
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
       - name: Setup gcloud
+        if: steps.deploy_config.outputs.deploy_enabled == 'true'
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
 
       - name: Deploy revision to Cloud Run
+        if: steps.deploy_config.outputs.deploy_enabled == 'true'
         env:
           IMAGE_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
@@ -94,6 +107,7 @@ jobs:
           gcloud run deploy "${ARGS[@]}"
 
       - name: Post-deploy readiness check
+        if: steps.deploy_config.outputs.deploy_enabled == 'true'
         run: |
           set -euo pipefail
           for attempt in {1..10}; do

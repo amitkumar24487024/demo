@@ -86,6 +86,7 @@ Workflow file: `.github/workflows/deploy-cloud-run.yml`
 - Deploys immutable image tag: `${DOCKERHUB_IMAGE}:${GITHUB_SHA}` (source SHA from the CI workflow run).
 - Uses GitHub OIDC + GCP Workload Identity Federation (no JSON key file).
 - Uses `production` GitHub Environment and workflow concurrency lock `cloud-run-production`.
+- If required Cloud Run secrets/variables are missing, the workflow exits successfully with a "Deploy skipped" notice.
 - Protect `main` with branch protection rules so only reviewed/authorized pushes can trigger production deploys.
 
 ### Required GitHub repository configuration for Cloud Run deploy
