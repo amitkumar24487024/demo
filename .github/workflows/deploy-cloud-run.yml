@@ -1,0 +1,119 @@
+name: CD Deploy to Cloud Run
+
+on:
+  workflow_run:
+    workflows: [ "CI and Docker Publish" ]
+    types: [ completed ]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: cloud-run-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      GCP_WIF_PROVIDER: ${{ secrets.GCP_WIF_PROVIDER }}
+      GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      GCP_REGION: ${{ vars.GCP_REGION }}
+      CLOUD_RUN_SERVICE: ${{ vars.CLOUD_RUN_SERVICE }}
+      DOCKERHUB_IMAGE: ${{ vars.DOCKERHUB_IMAGE }}
+      CLOUD_RUN_PORT: ${{ vars.CLOUD_RUN_PORT }}
+      CLOUD_RUN_MEMORY: ${{ vars.CLOUD_RUN_MEMORY }}
+      CLOUD_RUN_MIN_INSTANCES: ${{ vars.CLOUD_RUN_MIN_INSTANCES }}
+      CLOUD_RUN_MAX_INSTANCES: ${{ vars.CLOUD_RUN_MAX_INSTANCES }}
+      CLOUD_RUN_ALLOW_UNAUTHENTICATED: ${{ vars.CLOUD_RUN_ALLOW_UNAUTHENTICATED }}
+
+    steps:
+      - name: Validate deploy configuration
+        run: |
+          test -n "$GCP_PROJECT_ID" || { echo "Missing secret GCP_PROJECT_ID."; exit 1; }
+          test -n "$GCP_WIF_PROVIDER" || { echo "Missing secret GCP_WIF_PROVIDER."; exit 1; }
+          test -n "$GCP_SERVICE_ACCOUNT" || { echo "Missing secret GCP_SERVICE_ACCOUNT."; exit 1; }
+          test -n "$GCP_REGION" || { echo "Missing variable GCP_REGION."; exit 1; }
+          test -n "$CLOUD_RUN_SERVICE" || { echo "Missing variable CLOUD_RUN_SERVICE."; exit 1; }
+          test -n "$DOCKERHUB_IMAGE" || { echo "Missing variable DOCKERHUB_IMAGE."; exit 1; }
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Deploy revision to Cloud Run
+        env:
+          IMAGE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          IMAGE_URI="${DOCKERHUB_IMAGE}:${IMAGE_SHA}"
+          ARGS=(
+            "$CLOUD_RUN_SERVICE"
+            "--image=${IMAGE_URI}"
+            "--region=${GCP_REGION}"
+            "--project=${GCP_PROJECT_ID}"
+            "--quiet"
+          )
+
+          if [ -n "${CLOUD_RUN_PORT:-}" ]; then
+            ARGS+=("--port=${CLOUD_RUN_PORT}")
+          fi
+
+          if [ -n "${CLOUD_RUN_MEMORY:-}" ]; then
+            ARGS+=("--memory=${CLOUD_RUN_MEMORY}")
+          fi
+
+          if [ -n "${CLOUD_RUN_MIN_INSTANCES:-}" ]; then
+            ARGS+=("--min-instances=${CLOUD_RUN_MIN_INSTANCES}")
+          fi
+
+          if [ -n "${CLOUD_RUN_MAX_INSTANCES:-}" ]; then
+            ARGS+=("--max-instances=${CLOUD_RUN_MAX_INSTANCES}")
+          fi
+
+          if [ "${CLOUD_RUN_ALLOW_UNAUTHENTICATED:-false}" = "true" ]; then
+            ARGS+=("--allow-unauthenticated")
+          else
+            ARGS+=("--no-allow-unauthenticated")
+          fi
+
+          gcloud run deploy "${ARGS[@]}"
+
+      - name: Post-deploy readiness check
+        run: |
+          set -euo pipefail
+          for attempt in {1..10}; do
+            REVISION_PAIR="$(gcloud run services describe "$CLOUD_RUN_SERVICE" \
+              --region="$GCP_REGION" \
+              --project="$GCP_PROJECT_ID" \
+              --format="value(status.latestCreatedRevisionName,status.latestReadyRevisionName)")"
+            IFS=$'\t' read -r LATEST_CREATED_REVISION LATEST_READY_REVISION <<< "$REVISION_PAIR"
+            if [ -n "$LATEST_CREATED_REVISION" ] && [ "$LATEST_CREATED_REVISION" = "$LATEST_READY_REVISION" ]; then
+              break
+            fi
+            if [ "$attempt" -eq 10 ]; then
+              echo "Latest created revision is not ready."
+              echo "Created: ${LATEST_CREATED_REVISION:-<empty>}"
+              echo "Ready:   ${LATEST_READY_REVISION:-<empty>}"
+              exit 1
+            fi
+            sleep 5
+          done
+          gcloud run services describe "$CLOUD_RUN_SERVICE" \
+            --region="$GCP_REGION" \
+            --project="$GCP_PROJECT_ID" \
+            --format="value(status.url)"
