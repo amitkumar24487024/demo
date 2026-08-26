@@ -66,6 +66,7 @@ jobs:
             "--image=${IMAGE_URI}"
             "--region=${GCP_REGION}"
             "--project=${GCP_PROJECT_ID}"
+            "--async"
             "--quiet"
           )
 
