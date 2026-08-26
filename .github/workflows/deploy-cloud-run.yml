@@ -96,21 +96,23 @@ jobs:
       - name: Post-deploy readiness check
         run: |
           set -euo pipefail
-          LATEST_CREATED_REVISION="$(gcloud run services describe "$CLOUD_RUN_SERVICE" \
-            --region="$GCP_REGION" \
-            --project="$GCP_PROJECT_ID" \
-            --format="value(status.latestCreatedRevisionName)")"
-          LATEST_READY_REVISION="$(gcloud run services describe "$CLOUD_RUN_SERVICE" \
-            --region="$GCP_REGION" \
-            --project="$GCP_PROJECT_ID" \
-            --format="value(status.latestReadyRevisionName)")"
-          test -n "$LATEST_CREATED_REVISION" || { echo "No latest created revision found."; exit 1; }
-          test "$LATEST_CREATED_REVISION" = "$LATEST_READY_REVISION" || {
-            echo "Latest created revision is not ready."
-            echo "Created: $LATEST_CREATED_REVISION"
-            echo "Ready:   $LATEST_READY_REVISION"
-            exit 1
-          }
+          for attempt in {1..10}; do
+            REVISION_PAIR="$(gcloud run services describe "$CLOUD_RUN_SERVICE" \
+              --region="$GCP_REGION" \
+              --project="$GCP_PROJECT_ID" \
+              --format="value(status.latestCreatedRevisionName,status.latestReadyRevisionName)")"
+            IFS=';' read -r LATEST_CREATED_REVISION LATEST_READY_REVISION <<< "$REVISION_PAIR"
+            if [ -n "$LATEST_CREATED_REVISION" ] && [ "$LATEST_CREATED_REVISION" = "$LATEST_READY_REVISION" ]; then
+              break
+            fi
+            if [ "$attempt" -eq 10 ]; then
+              echo "Latest created revision is not ready."
+              echo "Created: ${LATEST_CREATED_REVISION:-<empty>}"
+              echo "Ready:   ${LATEST_READY_REVISION:-<empty>}"
+              exit 1
+            fi
+            sleep 5
+          done
           gcloud run services describe "$CLOUD_RUN_SERVICE" \
             --region="$GCP_REGION" \
             --project="$GCP_PROJECT_ID" \
